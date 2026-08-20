@@ -1,0 +1,63 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // CMS data is publicly readable so every visitor sees real-time updates from admin
+    match /cms/{docId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+
+    // Individual products and categories
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+
+    // Customer accounts
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Admin profiles
+    match /admins/{adminId} {
+      allow read, write: if isAuthenticated() && request.auth.uid == adminId;
+    }
+
+    // Real-time quick inquiries & sales agent live chat
+    match /chatInquiries/{inquiryId} {
+      allow read, write: if true;
+    }
+    match /chatInquiries/{inquiryId}/messages/{messageId} {
+      allow read, write: if true;
+    }
+    match /quickInquiries/{inquiryId} {
+      allow read, write: if true;
+    }
+
+    // Commercial RFQs & Quote Requests: anyone can submit, authenticated users & admins can read/write
+    match /rfqRequests/{rfqId} {
+      allow read, write: if isAuthenticated();
+      allow create: if true;
+    }
+
+    match /rfqs/{rfqId} {
+      allow read, write: if isAuthenticated();
+      allow create: if true;
+    }
+
+    match /test/{docId} {
+      allow read: if true;
+    }
+
+    match /{document=**} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+  }
+}

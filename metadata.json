@@ -1,0 +1,6 @@
+{
+  "name": "NaijaGlobal Agro",
+  "description": "High-end B2B landing page and RFQ portal for Nigerian food commodity exports.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

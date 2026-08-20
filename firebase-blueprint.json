@@ -1,0 +1,102 @@
+{
+  "entities": {
+    "AdminUser": {
+      "title": "AdminUser",
+      "description": "Administrator profile with management privileges",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth user ID" },
+        "email": { "type": "string", "format": "email", "description": "Admin email address" },
+        "displayName": { "type": "string", "description": "Admin full name" },
+        "role": { "type": "string", "enum": ["admin", "superadmin", "editor"], "description": "User access role" },
+        "avatarUrl": { "type": "string", "description": "Profile picture URL" },
+        "createdAt": { "type": "string", "description": "Account creation timestamp" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "CustomerUser": {
+      "title": "CustomerUser",
+      "description": "Registered buyer / customer account profile",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth user ID" },
+        "email": { "type": "string", "format": "email", "description": "Customer business email" },
+        "displayName": { "type": "string", "description": "Customer representative name" },
+        "companyName": { "type": "string", "description": "Buyer legal company name" },
+        "country": { "type": "string", "description": "Destination country" },
+        "phone": { "type": "string", "description": "Direct phone or WhatsApp number" },
+        "role": { "type": "string", "enum": ["customer", "buyer"], "description": "Customer role" },
+        "createdAt": { "type": "string", "description": "Registration ISO timestamp" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "CMSContent": {
+      "title": "CMSContent",
+      "description": "Real-time synced website content, products, homepage, and configuration",
+      "type": "object",
+      "properties": {
+        "homepage": { "type": "object", "description": "Hero text, statistics, banner details" },
+        "products": { "type": "array", "description": "Export product catalog specifications and pricing" },
+        "categories": { "type": "array", "description": "Commodity classification categories" },
+        "settings": { "type": "object", "description": "Global export terminal metadata and contacts" },
+        "updatedAt": { "type": "string", "description": "Last modified timestamp" }
+      }
+    },
+    "RFQItem": {
+      "title": "RFQItem",
+      "description": "Inbound commercial request for quote",
+      "type": "object",
+      "properties": {
+        "rfqId": { "type": "string", "description": "Generated unique RFQ ID" },
+        "buyerUserId": { "type": "string", "description": "Associated customer UID if signed in" },
+        "buyerCompany": { "type": "string", "description": "Buyer organization" },
+        "buyerEmail": { "type": "string", "description": "Contact email" },
+        "status": { "type": "string", "enum": ["new", "in-review", "quoted", "accepted", "declined", "fulfilled"] },
+        "timestamp": { "type": "number", "description": "Submission epoch timestamp" },
+        "estimatedValueUSD": { "type": "number", "description": "Estimated quote value in USD" }
+      },
+      "required": ["rfqId", "status", "timestamp"]
+    },
+    "ChatInquiry": {
+      "title": "ChatInquiry",
+      "description": "Live real-time sales desk inquiry session with commodity specialist",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "senderName": { "type": "string" },
+        "senderEmail": { "type": "string" },
+        "commodity": { "type": "string" },
+        "lastMessage": { "type": "string" },
+        "status": { "type": "string", "enum": ["open", "active", "resolved"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/cms/{docId}": {
+      "schema": "CMSContent",
+      "description": "Live real-time synced agricultural export catalog, homepage, and settings"
+    },
+    "/chatInquiries/{inquiryId}": {
+      "schema": "ChatInquiry",
+      "description": "Real-time sales desk inquiries and live chat threads"
+    },
+    "/users/{userId}": {
+      "schema": "CustomerUser",
+      "description": "Registered international commodity buyers and trade partners"
+    },
+    "/admins/{adminId}": {
+      "schema": "AdminUser",
+      "description": "Registered administrator accounts and permission roles"
+    },
+    "/rfqRequests/{rfqId}": {
+      "schema": "RFQItem",
+      "description": "Inbound commercial export requests for quotes in real time"
+    },
+    "/rfqs/{rfqId}": {
+      "schema": "RFQItem",
+      "description": "Commercial export quote requests from international commodity buyers"
+    }
+  }
+}
