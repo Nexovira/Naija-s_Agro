@@ -5,17 +5,19 @@ import { CheckCircle2, ShieldCheck, ArrowRight, FileText } from 'lucide-react';
 
 interface RFQFormProps {
   initialProductId?: string | null;
+  initialDestinationPort?: string | null;
   onSubmittedReceipt: (receipt: SubmittedRFQReceipt) => void;
 }
 
 export const RFQForm: React.FC<RFQFormProps> = ({
   initialProductId,
+  initialDestinationPort,
   onSubmittedReceipt,
 }) => {
   const { data, submitRFQ, customerUser, isCustomerAuthenticated, setIsCustomerPortalOpen } = useCMS();
   const { rfqSettings, products } = data;
 
-  const defaultPort = rfqSettings.popularPorts?.[0] || 'Port of Rotterdam (Netherlands) - NL RTM';
+  const defaultPort = initialDestinationPort || rfqSettings.popularPorts?.[0] || 'Port of Rotterdam (Netherlands) - NL RTM';
   const defaultPacking = rfqSettings.packagingOptions?.[0] || '50kg Standard Export PP Bags with Liner';
 
   const [formData, setFormData] = useState<RFQFormData>({
@@ -36,6 +38,23 @@ export const RFQForm: React.FC<RFQFormProps> = ({
   const [customPort, setCustomPort] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Sync initialDestinationPort if passed from Map
+  useEffect(() => {
+    if (initialDestinationPort) {
+      setFormData(prev => ({
+        ...prev,
+        destinationPort: initialDestinationPort,
+        incoterm: 'CIF' // default to CIF when selecting international port
+      }));
+      // If port is not in default popular ports, switch to custom or keep it selected
+      const isPopular = (rfqSettings.popularPorts || []).some(p => p.toLowerCase().includes(initialDestinationPort.toLowerCase()));
+      if (!isPopular) {
+        setCustomPort(true);
+      }
+    }
+  }, [initialDestinationPort, rfqSettings.popularPorts]);
+
 
   // Auto-sync when customerUser signs in or changes
   useEffect(() => {

@@ -394,7 +394,39 @@ export const CMSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // FIRESTORE REAL-TIME SYNCHRONIZATION (CMS DATA & RFQS)
   // -------------------------------------------------------------
 
+  // Initial fetch from server API to seed latest state on cold load
+  useEffect(() => {
+    fetch('/api/cms/all')
+      .then(res => res.json())
+      .then(serverData => {
+        if (serverData && typeof serverData === 'object' && serverData.products) {
+          setData(prev => {
+            // Only update if Firestore hasn't already synced newer data
+            if (firestoreSynced) return prev;
+            return {
+              ...prev,
+              ...serverData,
+              homepage: { ...prev.homepage, ...serverData.homepage },
+              siteSettings: { ...prev.siteSettings, ...serverData.siteSettings },
+              contactSettings: { ...prev.contactSettings, ...serverData.contactSettings },
+              rfqSettings: { ...prev.rfqSettings, ...serverData.rfqSettings },
+              products: Array.isArray(serverData.products) ? serverData.products : prev.products,
+              categories: Array.isArray(serverData.categories) ? serverData.categories : prev.categories,
+              certifications: Array.isArray(serverData.certifications) ? serverData.certifications : prev.certifications,
+              exportDocs: Array.isArray(serverData.exportDocs) ? serverData.exportDocs : prev.exportDocs,
+              supplyChainSteps: Array.isArray(serverData.supplyChainSteps) ? serverData.supplyChainSteps : prev.supplyChainSteps,
+              transitRoutes: Array.isArray(serverData.transitRoutes) ? serverData.transitRoutes : prev.transitRoutes,
+              rfqs: Array.isArray(serverData.rfqs) ? serverData.rfqs : prev.rfqs,
+              media: Array.isArray(serverData.media) ? serverData.media : prev.media
+            };
+          });
+        }
+      })
+      .catch(() => {});
+  }, [firestoreSynced]);
+
   // Real-time listener for `/cms/main` document (products, homepage, siteSettings, etc.)
+  // Every visitor, customer, and admin on any device receives instant updates
   useEffect(() => {
     const cmsDocRef = doc(db, 'cms', 'main');
     
@@ -406,21 +438,25 @@ export const CMSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           const merged: AppCMSData = {
             ...prev,
             ...cloudData,
-            homepage: { ...prev.homepage, ...cloudData.homepage },
-            siteSettings: { ...prev.siteSettings, ...cloudData.siteSettings },
-            contactSettings: { ...prev.contactSettings, ...cloudData.contactSettings },
-            rfqSettings: { ...prev.rfqSettings, ...cloudData.rfqSettings },
-            products: cloudData.products?.length ? cloudData.products : prev.products,
-            categories: cloudData.categories?.length ? cloudData.categories : prev.categories,
-            certifications: cloudData.certifications?.length ? cloudData.certifications : prev.certifications,
-            exportDocs: cloudData.exportDocs?.length ? cloudData.exportDocs : prev.exportDocs,
-            supplyChainSteps: cloudData.supplyChainSteps?.length ? cloudData.supplyChainSteps : prev.supplyChainSteps,
-            transitRoutes: cloudData.transitRoutes?.length ? cloudData.transitRoutes : prev.transitRoutes,
-            rfqs: cloudData.rfqs?.length ? cloudData.rfqs : prev.rfqs,
-            media: cloudData.media?.length ? cloudData.media : prev.media,
+            homepage: cloudData.homepage ? { ...prev.homepage, ...cloudData.homepage } : prev.homepage,
+            siteSettings: cloudData.siteSettings ? { ...prev.siteSettings, ...cloudData.siteSettings } : prev.siteSettings,
+            contactSettings: cloudData.contactSettings ? { ...prev.contactSettings, ...cloudData.contactSettings } : prev.contactSettings,
+            rfqSettings: cloudData.rfqSettings ? { ...prev.rfqSettings, ...cloudData.rfqSettings } : prev.rfqSettings,
+            products: Array.isArray(cloudData.products) ? cloudData.products : prev.products,
+            categories: Array.isArray(cloudData.categories) ? cloudData.categories : prev.categories,
+            certifications: Array.isArray(cloudData.certifications) ? cloudData.certifications : prev.certifications,
+            exportDocs: Array.isArray(cloudData.exportDocs) ? cloudData.exportDocs : prev.exportDocs,
+            supplyChainSteps: Array.isArray(cloudData.supplyChainSteps) ? cloudData.supplyChainSteps : prev.supplyChainSteps,
+            transitRoutes: Array.isArray(cloudData.transitRoutes) ? cloudData.transitRoutes : prev.transitRoutes,
+            rfqs: Array.isArray(cloudData.rfqs) ? cloudData.rfqs : prev.rfqs,
+            media: Array.isArray(cloudData.media) ? cloudData.media : prev.media,
             adminUser: cloudData.adminUser || prev.adminUser
           };
-          localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(merged));
+          try {
+            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(merged));
+          } catch (e) {
+            console.warn(e);
+          }
           return merged;
         });
       } else {
@@ -587,7 +623,7 @@ export const CMSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return () => unsubscribe();
   }, [data.adminUser]);
 
-  // Persist updated CMS state to Firestore and local storage
+  // Persist updated CMS state to Firestore, server disk cache, and local storage
   const saveState = async (updated: AppCMSData) => {
     setData(updated);
     try {
@@ -605,12 +641,24 @@ export const CMSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
     }
 
-    // Direct Cloud Firestore Write (automatically syncs to all active web visitors in real time)
+    // 1. Direct Cloud Firestore Write: Automatically triggers onSnapshot on all connected devices, mobiles, and browsers globally
     try {
       const cmsDocRef = doc(db, 'cms', 'main');
-      await setDoc(cmsDocRef, updated, { merge: true });
+      await setDoc(cmsDocRef, updated);
+      setFirestoreSynced(true);
     } catch (err) {
-      console.warn('Firestore CMS sync error:', err);
+      console.error('Firestore CMS global sync write error:', err);
+    }
+
+    // 2. Server API cache update for instant cold-start loads
+    try {
+      await fetch('/api/cms/save-all', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated)
+      });
+    } catch (e) {
+      // Server sync fallback
     }
   };
 

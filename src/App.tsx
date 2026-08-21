@@ -26,6 +26,7 @@ const MainAppContent: React.FC = () => {
 
   // Public state
   const [selectedProductForRFQ, setSelectedProductForRFQ] = useState<string | null>(null);
+  const [selectedPortForRFQ, setSelectedPortForRFQ] = useState<string | null>(null);
   const [activeDetailProduct, setActiveDetailProduct] = useState<Product | null>(null);
   const [submittedReceipt, setSubmittedReceipt] = useState<SubmittedRFQReceipt | null>(null);
 
@@ -49,9 +50,12 @@ const MainAppContent: React.FC = () => {
   }
 
   // Otherwise: Full Public High-End Landing Page
-  const scrollToRFQ = (productId?: string) => {
+  const scrollToRFQ = (productId?: string, portName?: string) => {
     if (productId) {
       setSelectedProductForRFQ(productId);
+    }
+    if (portName) {
+      setSelectedPortForRFQ(portName);
     }
     const rfqElement = document.getElementById('rfq');
     if (rfqElement) {
@@ -79,14 +83,18 @@ const MainAppContent: React.FC = () => {
         <TrustSection />
 
         {/* 4. Export Flow Supply Chain & Maritime Transit Schedules */}
-        <ExportFlowSection />
+        <ExportFlowSection 
+          onSelectRouteForRFQ={(port) => scrollToRFQ(undefined, port)}
+        />
 
         {/* 5. Functional Commercial RFQ Form (Saves directly to Admin CMS Pipeline) */}
         <RFQForm
           initialProductId={selectedProductForRFQ}
+          initialDestinationPort={selectedPortForRFQ}
           onSubmittedReceipt={(receipt) => setSubmittedReceipt(receipt)}
         />
       </main>
+
 
       {/* Footer with Legal Credentials & Admin Portal access */}
       <Footer />

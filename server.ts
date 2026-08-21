@@ -170,6 +170,17 @@ async function startServer() {
     res.json({ success: true, rfqSettings: cmsData.rfqSettings });
   });
 
+  // Save Full CMS State (bulk sync from admin)
+  app.post('/api/cms/save-all', (req, res) => {
+    const updatedData = req.body;
+    if (updatedData && typeof updatedData === 'object') {
+      saveCMSData(updatedData);
+      res.json({ success: true, message: 'Full CMS state saved to disk cache' });
+    } else {
+      res.status(400).json({ success: false, message: 'Invalid payload' });
+    }
+  });
+
   // Products CRUD
   app.post('/api/cms/products', (req, res) => {
     const cmsData = getCMSData();

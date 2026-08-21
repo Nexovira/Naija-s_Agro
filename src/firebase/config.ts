@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import { initializeFirestore, getFirestore, doc, getDocFromServer } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 // Initialize Firebase App instance
@@ -10,9 +10,21 @@ export const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getA
 export const auth = getAuth(app);
 
 // Initialize Cloud Firestore (with specific databaseId if provided)
-export const db = firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== '(default)'
-  ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
-  : getFirestore(app);
+const targetDatabaseId = firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== '(default)'
+  ? firebaseConfig.firestoreDatabaseId
+  : undefined;
+
+let firestoreDb;
+try {
+  firestoreDb = initializeFirestore(app, {
+    experimentalAutoDetectLongPolling: true,
+    ignoreUndefinedProperties: true,
+  }, targetDatabaseId);
+} catch {
+  firestoreDb = targetDatabaseId ? getFirestore(app, targetDatabaseId) : getFirestore(app);
+}
+
+export const db = firestoreDb;
 
 // Validation test connection to Firestore as required by Firebase skill
 export async function testFirestoreConnection(): Promise<boolean> {
@@ -20,14 +32,15 @@ export async function testFirestoreConnection(): Promise<boolean> {
     await getDocFromServer(doc(db, 'test', 'connection'));
     return true;
   } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.warn('Firestore offline or network constrained:', error.message);
+    if (error instanceof Error && (error.message.includes('offline') || error.message.includes('Backend didn\'t respond'))) {
+      console.warn('Firestore operating in offline resilient mode:', error.message);
     }
     return false;
   }
 }
 
-// Kick off test connection
+// Kick off test connection safely
 if (typeof window !== 'undefined') {
   testFirestoreConnection().catch(() => {});
 }
+

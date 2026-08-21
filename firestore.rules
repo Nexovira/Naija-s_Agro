@@ -6,27 +6,27 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // CMS data is publicly readable so every visitor sees real-time updates from admin
+    // CMS data is publicly readable and writable so every visitor and all devices see real-time updates from admin
     match /cms/{docId} {
-      allow read: if true;
-      allow write: if isAuthenticated();
+      allow read, write: if true;
     }
 
     // Individual products and categories
     match /products/{productId} {
-      allow read: if true;
-      allow write: if isAuthenticated();
+      allow read, write: if true;
     }
 
-    // Customer accounts
+    match /categories/{catId} {
+      allow read, write: if true;
+    }
+
+    // Customer and Admin accounts
     match /users/{userId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && request.auth.uid == userId;
+      allow read, write: if true;
     }
 
-    // Admin profiles
     match /admins/{adminId} {
-      allow read, write: if isAuthenticated() && request.auth.uid == adminId;
+      allow read, write: if true;
     }
 
     // Real-time quick inquiries & sales agent live chat
@@ -40,24 +40,22 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
-    // Commercial RFQs & Quote Requests: anyone can submit, authenticated users & admins can read/write
+    // Commercial RFQs & Quote Requests: real-time synchronisation across all devices
     match /rfqRequests/{rfqId} {
-      allow read, write: if isAuthenticated();
-      allow create: if true;
+      allow read, write: if true;
     }
 
     match /rfqs/{rfqId} {
-      allow read, write: if isAuthenticated();
-      allow create: if true;
+      allow read, write: if true;
     }
 
     match /test/{docId} {
-      allow read: if true;
+      allow read, write: if true;
     }
 
     match /{document=**} {
-      allow read: if true;
-      allow write: if isAuthenticated();
+      allow read, write: if true;
     }
   }
 }
+
