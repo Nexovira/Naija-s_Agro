@@ -29,6 +29,7 @@ import {
   Plus
 } from 'lucide-react';
 import { Incoterm, RFQFormData } from '../types';
+import { ShipmentTracker } from './ShipmentTracker';
 
 interface CustomerPortalModalProps {
   isOpen: boolean;
@@ -85,6 +86,14 @@ export const CustomerPortalModal: React.FC<CustomerPortalModalProps> = ({
   const [quickNotes, setQuickNotes] = useState('');
   const [quickSubmitting, setQuickSubmitting] = useState(false);
   const [quickSuccessMessage, setQuickSuccessMessage] = useState<string | null>(null);
+
+  // Active tracking RFQ target state
+  const [trackingSelectedRfqId, setTrackingSelectedRfqId] = useState<string | null>(null);
+
+  const handleTrackRfq = (rfqId: string) => {
+    setTrackingSelectedRfqId(rfqId);
+    setCustomerPortalTab('tracking');
+  };
 
   // Sync profile edit fields when user logs in
   React.useEffect(() => {
@@ -547,6 +556,21 @@ export const CustomerPortalModal: React.FC<CustomerPortalModalProps> = ({
                 </button>
 
                 <button
+                  onClick={() => setCustomerPortalTab('tracking')}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                    customerPortalTab === 'tracking'
+                      ? 'bg-[#0B3B24] text-white shadow-sm'
+                      : 'text-[#4A5568] hover:bg-[#FAF8F5] hover:text-[#0B3B24]'
+                  }`}
+                >
+                  <Ship className="w-3.5 h-3.5 text-[#E6C687]" />
+                  <span>Shipment Tracking</span>
+                  <span className="ml-1 px-1.5 py-0.2 rounded-full text-[9px] font-extrabold uppercase bg-emerald-500/20 text-emerald-800 border border-emerald-500/30">
+                    Live
+                  </span>
+                </button>
+
+                <button
                   onClick={() => setCustomerPortalTab('new-quote')}
                   className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                     customerPortalTab === 'new-quote'
@@ -597,13 +621,22 @@ export const CustomerPortalModal: React.FC<CustomerPortalModalProps> = ({
                       <h3 className="text-base font-bold text-[#0B3B24]">Your Export Consignment Inquiries</h3>
                       <p className="text-xs text-[#64748B]">Real-time status updates synced directly from our Lagos export terminal.</p>
                     </div>
-                    <button
-                      onClick={() => setCustomerPortalTab('new-quote')}
-                      className="px-3 py-1.5 rounded-xl bg-[#0B3B24] text-white text-xs font-bold hover:bg-[#072818] transition-colors flex items-center gap-1 cursor-pointer"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Submit Inbound RFQ</span>
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setCustomerPortalTab('tracking')}
+                        className="px-3 py-1.5 rounded-xl bg-white border border-[#D9D0BE] text-[#0B3B24] hover:bg-[#FAF8F5] text-xs font-bold transition-colors flex items-center gap-1 cursor-pointer"
+                      >
+                        <Ship className="w-3.5 h-3.5 text-[#0B3B24]" />
+                        <span>View Live Tracker</span>
+                      </button>
+                      <button
+                        onClick={() => setCustomerPortalTab('new-quote')}
+                        className="px-3 py-1.5 rounded-xl bg-[#0B3B24] text-white text-xs font-bold hover:bg-[#072818] transition-colors flex items-center gap-1 cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Submit Inbound RFQ</span>
+                      </button>
+                    </div>
                   </div>
 
                   {customerRFQs.length === 0 ? (
@@ -615,12 +648,20 @@ export const CustomerPortalModal: React.FC<CustomerPortalModalProps> = ({
                       <p className="text-xs text-[#64748B] max-w-sm mx-auto">
                         Submit a Request for Quotation (RFQ) to receive official proforma invoices, assay sheets, and scheduled bill of lading dates.
                       </p>
-                      <button
-                        onClick={() => setCustomerPortalTab('new-quote')}
-                        className="mt-2 px-4 py-2 rounded-xl bg-[#0B3B24] text-white text-xs font-bold hover:bg-[#072818] transition-colors cursor-pointer"
-                      >
-                        Create First Export Request
-                      </button>
+                      <div className="flex items-center justify-center gap-3 pt-2">
+                        <button
+                          onClick={() => setCustomerPortalTab('new-quote')}
+                          className="px-4 py-2 rounded-xl bg-[#0B3B24] text-white text-xs font-bold hover:bg-[#072818] transition-colors cursor-pointer"
+                        >
+                          Create First Export Request
+                        </button>
+                        <button
+                          onClick={() => setCustomerPortalTab('tracking')}
+                          className="px-4 py-2 rounded-xl bg-white border border-[#D9D0BE] text-[#0B3B24] text-xs font-bold hover:bg-[#FAF8F5] transition-colors cursor-pointer"
+                        >
+                          Explore Shipment Tracker Demo
+                        </button>
+                      </div>
                     </div>
                   ) : (
                     <div className="space-y-3">
@@ -639,7 +680,16 @@ export const CustomerPortalModal: React.FC<CustomerPortalModalProps> = ({
                                 {rfq.date}
                               </span>
                             </div>
-                            <div>{getStatusBadge(rfq.status)}</div>
+                            <div className="flex items-center gap-2">
+                              {getStatusBadge(rfq.status)}
+                              <button
+                                onClick={() => handleTrackRfq(rfq.rfqId)}
+                                className="inline-flex items-center gap-1 text-xs font-bold text-[#0B3B24] bg-[#0B3B24]/10 hover:bg-[#0B3B24]/20 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
+                              >
+                                <Ship className="w-3.5 h-3.5" />
+                                <span>Track Progress</span>
+                              </button>
+                            </div>
                           </div>
 
                           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
@@ -676,21 +726,39 @@ export const CustomerPortalModal: React.FC<CustomerPortalModalProps> = ({
                               Assigned Desk: <strong>{rfq.assignedAgent || 'Lagos Export Operations'}</strong>
                             </span>
 
-                            <a
-                              href={`https://wa.me/2348030000000?text=${encodeURIComponent(`Hello NaijaGlobal Agro, following up on our commercial RFQ ${rfq.rfqId} for ${rfq.productNames?.join(', ')}`)}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100 transition-colors font-semibold text-xs"
-                            >
-                              <MessageSquareShare className="w-3.5 h-3.5 text-emerald-600" />
-                              <span>WhatsApp Export Officer</span>
-                            </a>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => handleTrackRfq(rfq.rfqId)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#0B3B24] text-white hover:bg-[#072818] transition-colors font-semibold text-xs cursor-pointer"
+                              >
+                                <Ship className="w-3.5 h-3.5 text-[#E6C687]" />
+                                <span>Track Consignment</span>
+                              </button>
+                              <a
+                                href={`https://wa.me/2348030000000?text=${encodeURIComponent(`Hello NaijaGlobal Agro, following up on our commercial RFQ ${rfq.rfqId} for ${rfq.productNames?.join(', ')}`)}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100 transition-colors font-semibold text-xs"
+                              >
+                                <MessageSquareShare className="w-3.5 h-3.5 text-emerald-600" />
+                                <span>WhatsApp Officer</span>
+                              </a>
+                            </div>
                           </div>
                         </div>
                       ))}
                     </div>
                   )}
                 </div>
+              )}
+
+              {/* TAB 2: SHIPMENT TRACKING PROGRESS TRACKER */}
+              {customerPortalTab === 'tracking' && (
+                <ShipmentTracker
+                  customerRFQs={customerRFQs}
+                  initialSelectedRfqId={trackingSelectedRfqId}
+                  onOpenNewQuote={() => setCustomerPortalTab('new-quote')}
+                />
               )}
 
               {/* TAB 2: REQUEST NEW QUOTE (QUICK) */}

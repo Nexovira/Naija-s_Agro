@@ -89,9 +89,9 @@ interface CMSContextType {
   isCustomerAuthenticated: boolean;
   customerLoading: boolean;
   isCustomerPortalOpen: boolean;
-  customerPortalTab: 'inquiries' | 'new-quote' | 'profile';
+  customerPortalTab: 'inquiries' | 'tracking' | 'new-quote' | 'profile';
   setIsCustomerPortalOpen: (open: boolean) => void;
-  setCustomerPortalTab: (tab: 'inquiries' | 'new-quote' | 'profile') => void;
+  setCustomerPortalTab: (tab: 'inquiries' | 'tracking' | 'new-quote' | 'profile') => void;
   customerSignup: (params: { 
     email: string; 
     pass: string; 
@@ -232,7 +232,7 @@ export const CMSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   });
   const [customerLoading, setCustomerLoading] = useState(false);
   const [isCustomerPortalOpen, setIsCustomerPortalOpen] = useState(false);
-  const [customerPortalTab, setCustomerPortalTab] = useState<'inquiries' | 'new-quote' | 'profile'>('inquiries');
+  const [customerPortalTab, setCustomerPortalTab] = useState<'inquiries' | 'tracking' | 'new-quote' | 'profile'>('inquiries');
 
   // Track known RFQ IDs to prevent duplicate alerts
   const knownRfqIdsRef = useRef<Set<string>>(new Set((data.rfqs || []).map(r => r.rfqId || r.id)));

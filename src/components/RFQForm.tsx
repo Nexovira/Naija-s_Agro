@@ -1,13 +1,61 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId } from 'react';
 import { RFQFormData, Incoterm, SubmittedRFQReceipt } from '../types';
 import { useCMS } from '../context/CMSContext';
-import { CheckCircle2, ShieldCheck, ArrowRight, FileText } from 'lucide-react';
+import { 
+  CheckCircle2, 
+  ShieldCheck, 
+  ArrowRight, 
+  FileText, 
+  AlertCircle, 
+  Check, 
+  Mail, 
+  Phone, 
+  Building2, 
+  User, 
+  MapPin, 
+  Boxes 
+} from 'lucide-react';
 
 interface RFQFormProps {
   initialProductId?: string | null;
   initialDestinationPort?: string | null;
   onSubmittedReceipt: (receipt: SubmittedRFQReceipt) => void;
 }
+
+// RFC-compliant email regex ensuring local part, @, valid domain and top-level domain
+const EMAIL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
+
+// International phone validation: supports + country codes, spaces, dashes, brackets, min 7 digits, max 16 digits
+const validatePhoneNumber = (phone: string): string | null => {
+  const trimmed = phone.trim();
+  if (!trimmed) return 'Contact phone or WhatsApp number is required';
+  
+  const digitsOnly = trimmed.replace(/\D/g, '');
+  if (digitsOnly.length < 7) {
+    return 'Phone number must have at least 7 digits (including country code)';
+  }
+  if (digitsOnly.length > 16) {
+    return 'Phone number cannot exceed 16 digits';
+  }
+  
+  // Format check allowing +, digits, spaces, hyphens, and parentheses
+  const phonePattern = /^(\+?\d{1,4}[-.\s]?)?(\(?\d{1,4}\)?[-.\s]?)?[\d\-.\s()]{6,16}$/;
+  if (!phonePattern.test(trimmed)) {
+    return 'Please enter a valid international phone number (e.g. +1 555 123 4567 or +44 20 7946 0958)';
+  }
+  
+  return null;
+};
+
+// Email format validation
+const validateEmailAddress = (email: string): string | null => {
+  const trimmed = email.trim();
+  if (!trimmed) return 'Corporate email address is required';
+  if (!EMAIL_REGEX.test(trimmed)) {
+    return 'Please enter a valid corporate email format (e.g. buyer@company.com)';
+  }
+  return null;
+};
 
 export const RFQForm: React.FC<RFQFormProps> = ({
   initialProductId,
@@ -37,6 +85,9 @@ export const RFQForm: React.FC<RFQFormProps> = ({
 
   const [customPort, setCustomPort] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Real-time touched fields state tracking
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Sync initialDestinationPort if passed from Map
@@ -54,7 +105,6 @@ export const RFQForm: React.FC<RFQFormProps> = ({
       }
     }
   }, [initialDestinationPort, rfqSettings.popularPorts]);
-
 
   // Auto-sync when customerUser signs in or changes
   useEffect(() => {
@@ -81,43 +131,116 @@ export const RFQForm: React.FC<RFQFormProps> = ({
     }
   }, [initialProductId]);
 
+  // Real-time validation calculation function
+  const calculateErrors = (currentData: RFQFormData): Record<string, string> => {
+    const errs: Record<string, string> = {};
+    
+    // Products
+    if (!currentData.selectedProducts || currentData.selectedProducts.length === 0) {
+      errs.selectedProducts = 'Please select at least one commodity for your quotation.';
+    }
+
+    // Volume
+    if (!currentData.orderVolumeMT || currentData.orderVolumeMT <= 0 || isNaN(currentData.orderVolumeMT)) {
+      errs.orderVolumeMT = 'Please enter a valid order volume (minimum 1 Metric Ton).';
+    }
+
+    // Destination Port
+    if (!currentData.destinationPort || !currentData.destinationPort.trim()) {
+      errs.destinationPort = 'Destination discharge seaport is required.';
+    }
+
+    // Company Name
+    if (!currentData.companyName || !currentData.companyName.trim()) {
+      errs.companyName = 'Company / Importer name is required.';
+    } else if (currentData.companyName.trim().length < 2) {
+      errs.companyName = 'Company name must be at least 2 characters.';
+    }
+
+    // Representative Name
+    if (!currentData.buyerName || !currentData.buyerName.trim()) {
+      errs.buyerName = 'Representative / Contact person name is required.';
+    } else if (currentData.buyerName.trim().length < 2) {
+      errs.buyerName = 'Representative name must be at least 2 characters.';
+    }
+
+    // Business Email
+    const emailErr = validateEmailAddress(currentData.businessEmail);
+    if (emailErr) {
+      errs.businessEmail = emailErr;
+    }
+
+    // Phone / WhatsApp
+    const phoneErr = validatePhoneNumber(currentData.phoneOrWhatsApp);
+    if (phoneErr) {
+      errs.phoneOrWhatsApp = phoneErr;
+    }
+
+    return errs;
+  };
+
+  // Run real-time validation whenever form fields or touched status change
+  useEffect(() => {
+    const calculated = calculateErrors(formData);
+    setErrors(calculated);
+  }, [formData]);
+
+  const handleFieldChange = (field: keyof RFQFormData, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    setTouched(prev => ({ ...prev, [field]: true }));
+  };
+
+  const handleBlur = (field: keyof RFQFormData) => {
+    setTouched(prev => ({ ...prev, [field]: true }));
+  };
+
   const handleProductToggle = (productId: string) => {
     setFormData((prev) => {
       const exists = prev.selectedProducts.includes(productId);
+      let updated: string[];
       if (exists) {
         if (prev.selectedProducts.length === 1) return prev; // keep at least one
-        return { ...prev, selectedProducts: prev.selectedProducts.filter((id) => id !== productId) };
+        updated = prev.selectedProducts.filter((id) => id !== productId);
       } else {
-        return { ...prev, selectedProducts: [...prev.selectedProducts, productId] };
+        updated = [...prev.selectedProducts, productId];
       }
+      return { ...prev, selectedProducts: updated };
     });
+    setTouched(prev => ({ ...prev, selectedProducts: true }));
   };
 
   const handleVolumeChange = (vol: number) => {
     if (vol < 1) vol = 1;
-    setFormData((prev) => ({ ...prev, orderVolumeMT: vol }));
+    handleFieldChange('orderVolumeMT', vol);
   };
 
-  const estimatedContainers = Math.max(1, Math.ceil(formData.orderVolumeMT / 14));
-
-  const validate = () => {
-    const errs: Record<string, string> = {};
-    if (!formData.destinationPort.trim()) errs.destinationPort = 'Destination port is required';
-    if (formData.orderVolumeMT <= 0) errs.orderVolumeMT = 'Please enter a valid order volume in MT';
-    if (!formData.companyName.trim()) errs.companyName = 'Company name is required';
-    if (!formData.buyerName.trim()) errs.buyerName = 'Contact person name is required';
-    if (!formData.businessEmail.trim() || !formData.businessEmail.includes('@')) {
-      errs.businessEmail = 'Valid corporate email is required';
-    }
-    if (!formData.phoneOrWhatsApp.trim()) errs.phoneOrWhatsApp = 'Contact phone/WhatsApp is required';
-    return errs;
-  };
+  const estimatedContainers = Math.max(1, Math.ceil((formData.orderVolumeMT || 14) / 14));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const errs = validate();
-    setErrors(errs);
-    if (Object.keys(errs).length > 0) {
+
+    // Mark all fields as touched to trigger any validation errors
+    const allTouched: Record<string, boolean> = {
+      selectedProducts: true,
+      orderVolumeMT: true,
+      destinationPort: true,
+      companyName: true,
+      buyerName: true,
+      businessEmail: true,
+      phoneOrWhatsApp: true,
+    };
+    setTouched(allTouched);
+
+    const validationErrors = calculateErrors(formData);
+    setErrors(validationErrors);
+
+    if (Object.keys(validationErrors).length > 0) {
+      // Find first error and scroll smoothly
+      const firstErrorField = Object.keys(validationErrors)[0];
+      const errorElem = document.querySelector(`[data-error-field="${firstErrorField}"]`) || document.getElementById('rfq-commercial-form');
+      if (errorElem) {
+        errorElem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
       return;
     }
 
@@ -149,6 +272,11 @@ export const RFQForm: React.FC<RFQFormProps> = ({
   };
 
   const activeProducts = products.filter(p => p.active !== false);
+  const hasErrors = Object.keys(errors).length > 0;
+  const isEmailValid = Boolean(formData.businessEmail && !errors.businessEmail);
+  const isPhoneValid = Boolean(formData.phoneOrWhatsApp && !errors.phoneOrWhatsApp);
+  const isCompanyValid = Boolean(formData.companyName && !errors.companyName);
+  const isBuyerValid = Boolean(formData.buyerName && !errors.buyerName);
 
   return (
     <section id="rfq" className="py-20 md:py-28 bg-[#FAF8F5] border-t border-[#E8DFC8]">
@@ -173,13 +301,19 @@ export const RFQForm: React.FC<RFQFormProps> = ({
           
           {/* Multi-Input RFQ Form */}
           <div className="lg:col-span-8 bg-white rounded-2xl p-6 sm:p-10 border border-[#E0D8C8] shadow-sm">
-            <form onSubmit={handleSubmit} className="space-y-8" id="rfq-commercial-form">
+            <form onSubmit={handleSubmit} className="space-y-8" id="rfq-commercial-form" noValidate>
               
               {/* Step 1: Product Selection */}
-              <div>
-                <label className="block text-xs font-extrabold uppercase tracking-wider text-[#0B3B24] mb-3">
-                  1. Select Commodities Required
-                </label>
+              <div data-error-field="selectedProducts">
+                <div className="flex items-center justify-between mb-3">
+                  <label className="block text-xs font-extrabold uppercase tracking-wider text-[#0B3B24]">
+                    1. Select Commodities Required *
+                  </label>
+                  <span className="text-xs text-[#64748B] font-medium">
+                    {formData.selectedProducts.length} selected
+                  </span>
+                </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {activeProducts.map((prod) => {
                     const isSelected = formData.selectedProducts.includes(prod.id);
@@ -212,13 +346,20 @@ export const RFQForm: React.FC<RFQFormProps> = ({
                     );
                   })}
                 </div>
+
+                {touched.selectedProducts && errors.selectedProducts && (
+                  <div className="flex items-center gap-1.5 mt-2 text-xs text-red-600 font-medium">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                    <span>{errors.selectedProducts}</span>
+                  </div>
+                )}
               </div>
 
               {/* Step 2: Order Volume in Metric Tons */}
-              <div>
+              <div data-error-field="orderVolumeMT">
                 <div className="flex items-center justify-between mb-2">
                   <label htmlFor="order-volume-input" className="text-xs font-extrabold uppercase tracking-wider text-[#0B3B24]">
-                    2. Order Volume in Metric Tons (MT)
+                    2. Order Volume in Metric Tons (MT) *
                   </label>
                   <span className="text-xs text-[#64748B] font-medium">
                     Equivalent to ~<strong className="text-[#0B3B24]">{estimatedContainers}</strong> x 20ft FCL
@@ -232,14 +373,26 @@ export const RFQForm: React.FC<RFQFormProps> = ({
                       type="number"
                       min="1"
                       step="1"
-                      value={formData.orderVolumeMT}
+                      value={formData.orderVolumeMT || ''}
                       onChange={(e) => handleVolumeChange(parseFloat(e.target.value) || 0)}
-                      className="w-full pl-4 pr-16 py-3.5 rounded-xl border border-[#D9D0BE] bg-[#FAF8F5] text-[#1E232A] font-bold text-lg focus:outline-none focus:ring-2 focus:ring-[#0B3B24] focus:bg-white"
+                      onBlur={() => handleBlur('orderVolumeMT')}
+                      className={`w-full pl-4 pr-24 py-3.5 rounded-xl border bg-[#FAF8F5] text-[#1E232A] font-bold text-lg focus:outline-none focus:ring-2 focus:bg-white transition-all ${
+                        touched.orderVolumeMT && errors.orderVolumeMT
+                          ? 'border-red-400 bg-red-50/20 text-red-900 focus:ring-red-500'
+                          : touched.orderVolumeMT && !errors.orderVolumeMT
+                          ? 'border-emerald-500 bg-emerald-50/10 focus:ring-emerald-600'
+                          : 'border-[#D9D0BE] focus:ring-[#0B3B24]'
+                      }`}
                       placeholder="e.g. 14"
                     />
-                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-[#64748B] uppercase">
-                      Metric Tons
-                    </span>
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-1.5 pointer-events-none">
+                      {touched.orderVolumeMT && !errors.orderVolumeMT && (
+                        <Check className="w-4 h-4 text-emerald-600" />
+                      )}
+                      <span className="text-xs font-bold text-[#64748B] uppercase">
+                        MT
+                      </span>
+                    </div>
                   </div>
 
                   {/* Quick Volume Preset Chips */}
@@ -260,8 +413,12 @@ export const RFQForm: React.FC<RFQFormProps> = ({
                     ))}
                   </div>
                 </div>
-                {errors.orderVolumeMT && (
-                  <p className="text-xs text-red-600 font-medium mt-1">{errors.orderVolumeMT}</p>
+
+                {touched.orderVolumeMT && errors.orderVolumeMT && (
+                  <div className="flex items-center gap-1.5 mt-2 text-xs text-red-600 font-medium">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                    <span>{errors.orderVolumeMT}</span>
+                  </div>
                 )}
               </div>
 
@@ -285,7 +442,7 @@ export const RFQForm: React.FC<RFQFormProps> = ({
                       name="incoterm"
                       value="FOB"
                       checked={formData.incoterm === 'FOB'}
-                      onChange={() => setFormData({ ...formData, incoterm: 'FOB' })}
+                      onChange={() => handleFieldChange('incoterm', 'FOB')}
                       className="mt-1 text-[#0B3B24] focus:ring-[#0B3B24]"
                     />
                     <div>
@@ -312,7 +469,7 @@ export const RFQForm: React.FC<RFQFormProps> = ({
                       name="incoterm"
                       value="CIF"
                       checked={formData.incoterm === 'CIF'}
-                      onChange={() => setFormData({ ...formData, incoterm: 'CIF' })}
+                      onChange={() => handleFieldChange('incoterm', 'CIF')}
                       className="mt-1 text-[#0B3B24] focus:ring-[#0B3B24]"
                     />
                     <div>
@@ -330,14 +487,17 @@ export const RFQForm: React.FC<RFQFormProps> = ({
               </div>
 
               {/* Step 4: Destination Port */}
-              <div>
+              <div data-error-field="destinationPort">
                 <div className="flex items-center justify-between mb-2">
                   <label htmlFor="destination-port-select" className="text-xs font-extrabold uppercase tracking-wider text-[#0B3B24]">
-                    4. Destination Discharge Seaport
+                    4. Destination Discharge Seaport *
                   </label>
                   <button
                     type="button"
-                    onClick={() => setCustomPort(!customPort)}
+                    onClick={() => {
+                      setCustomPort(!customPort);
+                      setTouched(prev => ({ ...prev, destinationPort: true }));
+                    }}
                     className="text-xs text-[#0B3B24] font-semibold underline cursor-pointer"
                   >
                     {customPort ? 'Choose from major port list' : 'Type custom port'}
@@ -345,29 +505,59 @@ export const RFQForm: React.FC<RFQFormProps> = ({
                 </div>
 
                 {!customPort ? (
-                  <select
-                    id="destination-port-select"
-                    value={formData.destinationPort}
-                    onChange={(e) => setFormData({ ...formData, destinationPort: e.target.value })}
-                    className="w-full px-4 py-3.5 rounded-xl border border-[#D9D0BE] bg-[#FAF8F5] text-[#1E232A] font-medium text-sm focus:outline-none focus:ring-2 focus:ring-[#0B3B24] focus:bg-white"
-                  >
-                    {(rfqSettings.popularPorts || []).map((port) => (
-                      <option key={port} value={port}>
-                        {port}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="relative">
+                    <select
+                      id="destination-port-select"
+                      value={formData.destinationPort}
+                      onChange={(e) => handleFieldChange('destinationPort', e.target.value)}
+                      onBlur={() => handleBlur('destinationPort')}
+                      className={`w-full px-4 py-3.5 rounded-xl border bg-[#FAF8F5] text-[#1E232A] font-medium text-sm focus:outline-none focus:ring-2 focus:bg-white transition-all ${
+                        touched.destinationPort && errors.destinationPort
+                          ? 'border-red-400 bg-red-50/20 focus:ring-red-500'
+                          : touched.destinationPort && !errors.destinationPort
+                          ? 'border-emerald-500 bg-emerald-50/10 focus:ring-emerald-600'
+                          : 'border-[#D9D0BE] focus:ring-[#0B3B24]'
+                      }`}
+                    >
+                      {(rfqSettings.popularPorts || []).map((port) => (
+                        <option key={port} value={port}>
+                          {port}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 ) : (
-                  <input
-                    type="text"
-                    value={formData.destinationPort}
-                    onChange={(e) => setFormData({ ...formData, destinationPort: e.target.value })}
-                    placeholder="Enter Seaport Name, City & Country (e.g. Port of Long Beach, USA)"
-                    className="w-full px-4 py-3.5 rounded-xl border border-[#D9D0BE] bg-[#FAF8F5] text-[#1E232A] font-medium text-sm focus:outline-none focus:ring-2 focus:ring-[#0B3B24] focus:bg-white"
-                  />
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={formData.destinationPort}
+                      onChange={(e) => handleFieldChange('destinationPort', e.target.value)}
+                      onBlur={() => handleBlur('destinationPort')}
+                      placeholder="Enter Seaport Name, City & Country (e.g. Port of Long Beach, USA)"
+                      className={`w-full pl-4 pr-10 py-3.5 rounded-xl border bg-[#FAF8F5] text-[#1E232A] font-medium text-sm focus:outline-none focus:ring-2 focus:bg-white transition-all ${
+                        touched.destinationPort && errors.destinationPort
+                          ? 'border-red-400 bg-red-50/20 text-red-900 focus:ring-red-500'
+                          : touched.destinationPort && !errors.destinationPort
+                          ? 'border-emerald-500 bg-emerald-50/10 focus:ring-emerald-600'
+                          : 'border-[#D9D0BE] focus:ring-[#0B3B24]'
+                      }`}
+                    />
+                    {touched.destinationPort && (
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                        {errors.destinationPort ? (
+                          <AlertCircle className="w-4 h-4 text-red-500" />
+                        ) : (
+                          <Check className="w-4 h-4 text-emerald-600" />
+                        )}
+                      </div>
+                    )}
+                  </div>
                 )}
-                {errors.destinationPort && (
-                  <p className="text-xs text-red-600 font-medium mt-1">{errors.destinationPort}</p>
+                {touched.destinationPort && errors.destinationPort && (
+                  <div className="flex items-center gap-1.5 mt-2 text-xs text-red-600 font-medium">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                    <span>{errors.destinationPort}</span>
+                  </div>
                 )}
               </div>
 
@@ -379,7 +569,7 @@ export const RFQForm: React.FC<RFQFormProps> = ({
                 <select
                   id="packaging-preference-select"
                   value={formData.packagingType}
-                  onChange={(e) => setFormData({ ...formData, packagingType: e.target.value })}
+                  onChange={(e) => handleFieldChange('packagingType', e.target.value)}
                   className="w-full px-4 py-3 rounded-xl border border-[#D9D0BE] bg-[#FAF8F5] text-[#1E232A] text-sm focus:outline-none focus:ring-2 focus:ring-[#0B3B24]"
                 >
                   {(rfqSettings.packagingOptions || [
@@ -420,60 +610,182 @@ export const RFQForm: React.FC<RFQFormProps> = ({
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label htmlFor="company-name-input" className="block text-xs font-medium text-[#4A5568] mb-1">Company / Importer Name *</label>
-                    <input
-                      id="company-name-input"
-                      type="text"
-                      required
-                      value={formData.companyName}
-                      onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
-                      placeholder="e.g. Apex Global Foods Ltd"
-                      className="w-full px-4 py-3 rounded-xl border border-[#D9D0BE] bg-[#FAF8F5] text-sm text-[#1E232A] focus:outline-none focus:ring-2 focus:ring-[#0B3B24] focus:bg-white"
-                    />
-                    {errors.companyName && <p className="text-xs text-red-600 mt-1">{errors.companyName}</p>}
+                  {/* Company / Importer Name */}
+                  <div data-error-field="companyName">
+                    <label htmlFor="company-name-input" className="block text-xs font-medium text-[#4A5568] mb-1">
+                      Company / Importer Name *
+                    </label>
+                    <div className="relative">
+                      <input
+                        id="company-name-input"
+                        type="text"
+                        required
+                        value={formData.companyName}
+                        onChange={(e) => handleFieldChange('companyName', e.target.value)}
+                        onBlur={() => handleBlur('companyName')}
+                        placeholder="e.g. Apex Global Foods Ltd"
+                        className={`w-full pl-10 pr-10 py-3 rounded-xl border bg-[#FAF8F5] text-sm text-[#1E232A] focus:outline-none focus:ring-2 focus:bg-white transition-all ${
+                          touched.companyName && errors.companyName
+                            ? 'border-red-400 bg-red-50/20 text-red-900 focus:ring-red-500'
+                            : touched.companyName && isCompanyValid
+                            ? 'border-emerald-500 bg-emerald-50/10 focus:ring-emerald-600'
+                            : 'border-[#D9D0BE] focus:ring-[#0B3B24]'
+                        }`}
+                      />
+                      <Building2 className="w-4 h-4 text-[#8C7A5B] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      {touched.companyName && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                          {errors.companyName ? (
+                            <AlertCircle className="w-4 h-4 text-red-500" />
+                          ) : (
+                            <Check className="w-4 h-4 text-emerald-600" />
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    {touched.companyName && errors.companyName && (
+                      <div className="flex items-center gap-1.5 mt-1 text-xs text-red-600 font-medium">
+                        <AlertCircle className="w-3 h-3 shrink-0" />
+                        <span>{errors.companyName}</span>
+                      </div>
+                    )}
                   </div>
 
-                  <div>
-                    <label htmlFor="buyer-name-input" className="block text-xs font-medium text-[#4A5568] mb-1">Representative Name *</label>
-                    <input
-                      id="buyer-name-input"
-                      type="text"
-                      required
-                      value={formData.buyerName}
-                      onChange={(e) => setFormData({ ...formData, buyerName: e.target.value })}
-                      placeholder="e.g. David Vance (Procurement Dir.)"
-                      className="w-full px-4 py-3 rounded-xl border border-[#D9D0BE] bg-[#FAF8F5] text-sm text-[#1E232A] focus:outline-none focus:ring-2 focus:ring-[#0B3B24] focus:bg-white"
-                    />
-                    {errors.buyerName && <p className="text-xs text-red-600 mt-1">{errors.buyerName}</p>}
+                  {/* Representative Name */}
+                  <div data-error-field="buyerName">
+                    <label htmlFor="buyer-name-input" className="block text-xs font-medium text-[#4A5568] mb-1">
+                      Representative Name *
+                    </label>
+                    <div className="relative">
+                      <input
+                        id="buyer-name-input"
+                        type="text"
+                        required
+                        value={formData.buyerName}
+                        onChange={(e) => handleFieldChange('buyerName', e.target.value)}
+                        onBlur={() => handleBlur('buyerName')}
+                        placeholder="e.g. David Vance (Procurement Dir.)"
+                        className={`w-full pl-10 pr-10 py-3 rounded-xl border bg-[#FAF8F5] text-sm text-[#1E232A] focus:outline-none focus:ring-2 focus:bg-white transition-all ${
+                          touched.buyerName && errors.buyerName
+                            ? 'border-red-400 bg-red-50/20 text-red-900 focus:ring-red-500'
+                            : touched.buyerName && isBuyerValid
+                            ? 'border-emerald-500 bg-emerald-50/10 focus:ring-emerald-600'
+                            : 'border-[#D9D0BE] focus:ring-[#0B3B24]'
+                        }`}
+                      />
+                      <User className="w-4 h-4 text-[#8C7A5B] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      {touched.buyerName && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                          {errors.buyerName ? (
+                            <AlertCircle className="w-4 h-4 text-red-500" />
+                          ) : (
+                            <Check className="w-4 h-4 text-emerald-600" />
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    {touched.buyerName && errors.buyerName && (
+                      <div className="flex items-center gap-1.5 mt-1 text-xs text-red-600 font-medium">
+                        <AlertCircle className="w-3 h-3 shrink-0" />
+                        <span>{errors.buyerName}</span>
+                      </div>
+                    )}
                   </div>
 
-                  <div>
-                    <label htmlFor="business-email-input" className="block text-xs font-medium text-[#4A5568] mb-1">Corporate Email Address *</label>
-                    <input
-                      id="business-email-input"
-                      type="email"
-                      required
-                      value={formData.businessEmail}
-                      onChange={(e) => setFormData({ ...formData, businessEmail: e.target.value })}
-                      placeholder="procurement@company.com"
-                      className="w-full px-4 py-3 rounded-xl border border-[#D9D0BE] bg-[#FAF8F5] text-sm text-[#1E232A] focus:outline-none focus:ring-2 focus:ring-[#0B3B24] focus:bg-white"
-                    />
-                    {errors.businessEmail && <p className="text-xs text-red-600 mt-1">{errors.businessEmail}</p>}
+                  {/* Corporate Email Address with Real-time format validation */}
+                  <div data-error-field="businessEmail">
+                    <div className="flex items-center justify-between mb-1">
+                      <label htmlFor="business-email-input" className="block text-xs font-medium text-[#4A5568]">
+                        Corporate Email Address *
+                      </label>
+                      <span className="text-[11px] text-[#718096]">Format: name@company.com</span>
+                    </div>
+                    <div className="relative">
+                      <input
+                        id="business-email-input"
+                        type="email"
+                        required
+                        value={formData.businessEmail}
+                        onChange={(e) => handleFieldChange('businessEmail', e.target.value)}
+                        onBlur={() => handleBlur('businessEmail')}
+                        placeholder="procurement@company.com"
+                        className={`w-full pl-10 pr-10 py-3 rounded-xl border bg-[#FAF8F5] text-sm text-[#1E232A] focus:outline-none focus:ring-2 focus:bg-white transition-all ${
+                          touched.businessEmail && errors.businessEmail
+                            ? 'border-red-400 bg-red-50/20 text-red-900 focus:ring-red-500'
+                            : touched.businessEmail && isEmailValid
+                            ? 'border-emerald-500 bg-emerald-50/10 focus:ring-emerald-600'
+                            : 'border-[#D9D0BE] focus:ring-[#0B3B24]'
+                        }`}
+                      />
+                      <Mail className="w-4 h-4 text-[#8C7A5B] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      {touched.businessEmail && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                          {errors.businessEmail ? (
+                            <AlertCircle className="w-4 h-4 text-red-500" />
+                          ) : (
+                            <Check className="w-4 h-4 text-emerald-600" />
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    {touched.businessEmail && errors.businessEmail ? (
+                      <div className="flex items-center gap-1.5 mt-1 text-xs text-red-600 font-medium">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                        <span>{errors.businessEmail}</span>
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-[#718096] mt-1">
+                        Proforma invoices, test assays, and shipping updates will be dispatched to this address.
+                      </p>
+                    )}
                   </div>
 
-                  <div>
-                    <label htmlFor="phone-input" className="block text-xs font-medium text-[#4A5568] mb-1">Phone / WhatsApp (with Country Code) *</label>
-                    <input
-                      id="phone-input"
-                      type="text"
-                      required
-                      value={formData.phoneOrWhatsApp}
-                      onChange={(e) => setFormData({ ...formData, phoneOrWhatsApp: e.target.value })}
-                      placeholder="+1 (555) 019-2834"
-                      className="w-full px-4 py-3 rounded-xl border border-[#D9D0BE] bg-[#FAF8F5] text-sm text-[#1E232A] focus:outline-none focus:ring-2 focus:ring-[#0B3B24] focus:bg-white"
-                    />
-                    {errors.phoneOrWhatsApp && <p className="text-xs text-red-600 mt-1">{errors.phoneOrWhatsApp}</p>}
+                  {/* Phone / WhatsApp with International format validation */}
+                  <div data-error-field="phoneOrWhatsApp">
+                    <div className="flex items-center justify-between mb-1">
+                      <label htmlFor="phone-input" className="block text-xs font-medium text-[#4A5568]">
+                        Phone / WhatsApp (with Country Code) *
+                      </label>
+                      <span className="text-[11px] text-[#718096]">e.g. +1 555 019 2834</span>
+                    </div>
+                    <div className="relative">
+                      <input
+                        id="phone-input"
+                        type="tel"
+                        required
+                        value={formData.phoneOrWhatsApp}
+                        onChange={(e) => handleFieldChange('phoneOrWhatsApp', e.target.value)}
+                        onBlur={() => handleBlur('phoneOrWhatsApp')}
+                        placeholder="+1 (555) 019-2834"
+                        className={`w-full pl-10 pr-10 py-3 rounded-xl border bg-[#FAF8F5] text-sm text-[#1E232A] focus:outline-none focus:ring-2 focus:bg-white transition-all ${
+                          touched.phoneOrWhatsApp && errors.phoneOrWhatsApp
+                            ? 'border-red-400 bg-red-50/20 text-red-900 focus:ring-red-500'
+                            : touched.phoneOrWhatsApp && isPhoneValid
+                            ? 'border-emerald-500 bg-emerald-50/10 focus:ring-emerald-600'
+                            : 'border-[#D9D0BE] focus:ring-[#0B3B24]'
+                        }`}
+                      />
+                      <Phone className="w-4 h-4 text-[#8C7A5B] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      {touched.phoneOrWhatsApp && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                          {errors.phoneOrWhatsApp ? (
+                            <AlertCircle className="w-4 h-4 text-red-500" />
+                          ) : (
+                            <Check className="w-4 h-4 text-emerald-600" />
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    {touched.phoneOrWhatsApp && errors.phoneOrWhatsApp ? (
+                      <div className="flex items-center gap-1.5 mt-1 text-xs text-red-600 font-medium">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                        <span>{errors.phoneOrWhatsApp}</span>
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-[#718096] mt-1">
+                        Our trading desk provides real-time WhatsApp container loading updates.
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -485,12 +797,27 @@ export const RFQForm: React.FC<RFQFormProps> = ({
                     id="special-requirements-input"
                     rows={3}
                     value={formData.specialRequirements}
-                    onChange={(e) => setFormData({ ...formData, specialRequirements: e.target.value })}
+                    onChange={(e) => handleFieldChange('specialRequirements', e.target.value)}
                     placeholder="Specify any custom aflatoxin thresholds (e.g. < 4 ppb for EU), third-party SGS inspection requests, or preferred ocean carrier."
                     className="w-full px-4 py-3 rounded-xl border border-[#D9D0BE] bg-[#FAF8F5] text-sm text-[#1E232A] focus:outline-none focus:ring-2 focus:ring-[#0B3B24] focus:bg-white"
                   />
                 </div>
               </div>
+
+              {/* Submit Error Summary banner if any errors exist when attempted */}
+              {Object.keys(touched).length > 0 && hasErrors && (
+                <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5">
+                  <AlertCircle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <p className="font-bold">Please complete the highlighted required fields:</p>
+                    <ul className="list-disc list-inside space-y-0.5 text-amber-800">
+                      {Object.entries(errors).map(([key, msg]) => (
+                        <li key={key}>{msg}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              )}
 
               {/* Submit Button */}
               <button
@@ -615,3 +942,4 @@ export const RFQForm: React.FC<RFQFormProps> = ({
     </section>
   );
 };
+
